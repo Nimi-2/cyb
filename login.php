@@ -35,8 +35,12 @@ if (isset($_REQUEST['log_user_in'])) {
     echo 'Login successfull<BR/>';
 
     $_SESSION['login'] = $login;
+    $_SESSION['user_id']=$result['user_id'];
     $_SESSION['session_expire'] = time();
 
+    $Pdo->save_sing_in($login);
+    $Pdo->register_user_activity('login',
+    $result['user_id'], '', '', '');
     $Pdo->add_permissions_and_roles_to_user_session($result['user_id']);
     
 
@@ -46,6 +50,7 @@ if (isset($_REQUEST['log_user_in'])) {
  if ($result['result']=='success'){
  echo "Success: ".$login;
  $_SESSION['login']=$login;
+ $_SESSION['user_id']=$result['user_id'];
  $_SESSION['logged']='After first step';
  ?>
  <hr>

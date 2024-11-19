@@ -9,6 +9,7 @@ if (isset($_SESSION['session_expire'])) {
     }
 }
 
+
 ?><h5><?php
     if (!empty($_SESSION['login'])) {
         echo $_SESSION['login'];
@@ -49,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Save message
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($errors)) {
     $db = new Db("localhost", "news", "root", "");
-    $db->addMessage($name, $type, $content);
+    $db->addMessage($name, $type, $content, $_SESSION['login']);
     header("Location: messages.php");
     exit();
 }

@@ -1,4 +1,17 @@
 <?php
+session_start();
+
+if (isset($_SESSION['session_expire'])) {
+    if (time() - $_SESSION['session_expire'] > (60 * 5)) {
+        session_destroy();
+    } else {
+        $_SESSION['session_expire'] = time();
+    }
+}
+if (empty($_SESSION['permissions'][23])) {
+    die;
+}?>
+<?php
 include_once "classes/Pdo.php";
 //require 'pdo.php';
 

@@ -39,20 +39,25 @@ class Db
         return $results;
     }
 
-    public function addMessage($name, $type, $content)
+    public function addMessage($name, $type, $content, $login)
     {
         $insert_query =
             "INSERT INTO message
-                (`name`,`type`, `message`,`deleted`)
+                (`name`,`type`, `message`,`deleted`, `user_id`)
             VALUES
-                (:name, :type, :content, 0)";
+                (:name, :type, :content, 0, (
+                    SELECT id FROM user WHERE login = :login LIMIT 1
+                ))";
         try {
             $stmt = $this->pdo->prepare($insert_query);
             $stmt->execute(
                 array(
                     ':name' => Filter::sanitizeData($name, 'str'),
                     ':type' => Filter::sanitizeData($type, 'str'),
-                    ':content' => Filter::sanitizeData($content, 'str')));
+                    ':content' => Filter::sanitizeData($content, 'str'),
+                    ':login' => Filter::sanitizeData($login, 'str'),
+                    )
+                );
             return true;
         } catch (PDOException $e) {
             echo "Insert failed: " . $e->getMessage();
@@ -63,11 +68,14 @@ class Db
     public function getSingleMessage($message_id)
     {
         $query =
-            "SELECT `id`, `name`, `type`, `message`
-            FROM message WHERE id = :message_id";
+        "SELECT m.`id`, `name`, `type`, `message`, `login`
+            FROM message m 
+            LEFT JOIN user u ON u.id = m.user_id
+            WHERE m.id = :message_id 
+            ";
         
         // dodanie wyswietlenia wykonanego selecta 
-        echo $query.'<br>';
+        // echo $query.'<br>';
 
         try {
             $stmt = $this->pdo->prepare($query);
@@ -108,6 +116,6 @@ class Db
             if ($message->id == $message_id)
                 return $message->message;
         endforeach;
-    }
+    }    
 }
- ?>
+ 

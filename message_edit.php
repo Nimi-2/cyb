@@ -9,10 +9,6 @@ if (isset($_SESSION['session_expire'])) {
     }
 }
 
-if (empty($_SESSION['permissions'][21])) {
-    die;
-}
-
 ?><h5><?php
     if (!empty($_SESSION['login'])) {
         echo $_SESSION['login'];
@@ -22,9 +18,12 @@ if (empty($_SESSION['permissions'][21])) {
 ?></h5><?php
 include_once "classes/Page.php";
 include_once "classes/Db.php";
+include_once "classes/Pdo.php";
 include_once "classes/Filter.php";
 //require './htmlpurifier-4.14.0/library/HTMLPurifier.auto.php';
 Page::display_header("Edit message");
+
+
 
 if (isset($_POST['id'])) {
     $message_id = Filter::sanitizeData($_POST['id'], 'num');
@@ -34,7 +33,14 @@ if (isset($_POST['id'])) {
         $message_title = $msg['name'];
         $message_content = $msg['message'];
         $message_type = $msg['type'];
+        $message_author = $msg['login'];
     endforeach;
+}
+
+
+
+if (empty($_SESSION['permissions'][21]) && $message_author != $_SESSION['login']) {
+    die;
 }
 
 if (isset($_POST['update_message'])) {
@@ -44,6 +50,11 @@ if (isset($_POST['update_message'])) {
     $message_content = Filter::sanitizeData($_POST['content'], 'str');
 
     $db->updateMessage($message_id, $message_title, $message_type, $message_content);
+
+    $pdo = new Pdo_();
+    $prev_data = $message_id."|".$msg['name']."|". $msg['type']."|". $msg['message'];
+    $present_data = $message_id."|".$_POST['name']."|". $_POST['type']."|". $_POST['content'];
+    $pdo->register_user_activity('edit_msg',$_POST['id'],$prev_data, $present_data, 'mesage');
     header("Location: messages.php");
     exit();
 }

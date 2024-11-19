@@ -31,6 +31,7 @@ class Page
                 <a href="delete_role.php">delete role</a><br>
                 <a href="remove_user_role.php">remove user role</a><br>
                 <a href="users.php">users list</a><br>
+                <a href="activity.php">users activity</a><br>
             <?php endif; ?>
            
             <?php

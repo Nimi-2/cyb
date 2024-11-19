@@ -2,6 +2,12 @@
 
 session_start();
 
+include_once "classes/Page.php";
+include_once "classes/Pdo.php";
+
+Page::display_header("Main page");
+$Pdo = new Pdo_();
+
 if (isset($_SESSION['session_expire'])) {
     if (time() - $_SESSION['session_expire'] > (60 * 5)) {
         session_destroy();
@@ -11,9 +17,22 @@ if (isset($_SESSION['session_expire'])) {
 }
 
 if (isset($_REQUEST['logout'])) {
+    $Pdo->register_user_activity(
+        'logout',
+        $_SESSION['user_id'],
+        '',
+        '', 
+        ''
+    );
+    
+
     unset($_SESSION['login']);
+    unset($_SESSION['user_id']);
     unset($_SESSION['permissions']);
     unset($_SESSION['roles']);
+
+    $Pdo->save_sing_out();
+    session_regenerate_id(); //zmiana id
 }
 
 ?><h5><?php
@@ -25,11 +44,7 @@ if (isset($_REQUEST['logout'])) {
         ?></h5><?php
 
 
-                include_once "classes/Page.php";
-                include_once "classes/Pdo.php";
-
-                Page::display_header("Main page");
-                $Pdo = new Pdo_();
+                
                 // adding new user
                 if (isset($_REQUEST['add_user'])) {
                     $login = $_REQUEST['login'];

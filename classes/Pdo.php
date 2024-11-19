@@ -48,9 +48,11 @@ $this->mail = new M();
     echo 'Login successfull<BR/>';
 
     $_SESSION['login'] = $user_data['login'];
+    
     $_SESSION['session_expire'] = time();
 
 
+    $this->save_sing_in($user_data['login']);
     $this->add_permissions_and_roles_to_user_session($user_data['user_id']);
 
     
@@ -348,7 +350,13 @@ public function log_2F_step1($login,$password){
     $stmt->execute(['login'=>$login]);
     $user_data=$stmt->fetch();
     $password = hash('sha512', $password . $user_data['salt']);
-
+    
+    $this->register_user_login(
+        $user_data['id'], 
+        $this->getUserIP(), 
+        $password==$user_data['hash'], 
+        $_SERVER['HTTP_USER_AGENT']
+    );
     if (!$user_data['2fa']) {
                 // echo 'Login successfull<BR/>';
 
@@ -369,6 +377,7 @@ public function log_2F_step1($login,$password){
         }
     }
 
+    
     if($password==$user_data['hash']){
 
        
@@ -386,7 +395,6 @@ public function log_2F_step1($login,$password){
     $this->db->prepare($sql)->execute($data);
 
     $this->mail->send_email($user_data['email'], $otp);
-
     //add the code to send an e-mail with OTP
     $result= [
     'result'=>'success'
@@ -423,6 +431,7 @@ public function log_2F_step1($login,$password){
 
     public function remove_role($role_id) {
         // Usuwanie wszystkich uprawnień przypisanych do roli
+        
         $stmt = $this->db->prepare("DELETE FROM role_permission WHERE role_id = :role_id");
         $stmt->execute(['role_id' => $role_id]);
     
@@ -440,6 +449,146 @@ public function log_2F_step1($login,$password){
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    	
+
+    public function get_activity()
+    {
+        $stmt = $this->db->prepare("
+        
+        SELECT 
+        id, id_user, action_taken, table_affected, row_number,
+        previous_data, new_data
+        
+        FROM user_activity");
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function get_single_activity($activity_id)
+    {
+        $stmt = $this->db->prepare("
+        
+        SELECT 
+        id, id_user, action_taken, table_affected, row_number,
+        previous_data, new_data
+        
+        FROM user_activity
+
+        WHERE id = :id
+        
+        ");
+        $stmt->execute(['id'=>$activity_id]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function save_sing_in($login)
+    {
+        $stmt = $this->db->prepare("
+            INSERT INTO users_sessions (user_id, data_login, hash_session_id) 
+            VALUES 
+                (
+                    (SELECT id FROM user WHERE login = :login LIMIT 1),
+                    NOW(),
+                    :hash_session_id
+                )
+        ");
+        $stmt->bindParam(':login', $login);
+        $hash_session_id = hash('sha256', session_id());
+        $stmt->bindParam(':hash_session_id', $hash_session_id);
+
+        
+        try {
+            $stmt->execute();
+        } catch(PDOException $e) {
+            // Możesz tutaj obsłużyć wyjątek, na przykład wyświetlić komunikat o błędzie
+            throw $e;
+        }
+    }
+
+    public function getUserIP() {
+        if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+            $ip = $_SERVER['HTTP_CLIENT_IP'];
+        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
+        } else {
+            $ip = $_SERVER['REMOTE_ADDR'];
+        }
+        return $ip;
+    }
+
+    
+
+    public function save_sing_out()
+    {
+        $stmt = $this->db->prepare("
+            UPDATE users_sessions
+            SET data_logout = NOW()
+            WHERE hash_session_id = :hash_session_id
+        ");
+
+        $hash_session_id = hash('sha256', session_id());
+        $stmt->bindParam(':hash_session_id', $hash_session_id);
+
+        try {
+            $stmt->execute();
+        } catch (PDOException $e) {
+            // Możesz tutaj obsłużyć wyjątek, na przykład wyświetlić komunikat o błędzie
+            throw $e;
+        }
+    }
+
+    public function register_user_login($id_user,$ip_address,$correct,$computer)
+        {
+        //id_user=-1 - no such a user
+        $id_user = $this->purifier->purify($id_user);
+        $ip_address = $this->purifier->purify($ip_address);
+        $correct = $this->purifier->purify($correct);
+        $computer = $this->purifier->purify($computer);
+        if (filter_var($id_user, FILTER_VALIDATE_INT)) {
+        if ($id_user==-1){
+        //no such a user: incorrect login
+        //add necessary code here
+        }
+        else{
+        //Existing user login
+        //check if IP address is registered in DB
+        try {
+        $sql = "SELECT id FROM ip_address WHERE adres_ip=:adres_ip";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute(['adres_ip' => $ip_address]);
+        $data = $stmt->fetch();
+        if(empty($data['id'])) {
+        //IP address not registered. Register in db
+        $sql="INSERT INTO `ip_address`(`ok_login_num`, `bad_login_num`,
+        `last_bad_login_num`, `permanent_lock`, `adres_IP`) "
+        ." VALUES (0,0,0,0,:ip_address)";
+        $this->db->prepare($sql)->execute(['ip_address'=>$ip_address]);
+        //check id of inserted record
+        $sql = "SELECT id FROM ip_address WHERE adres_ip=:adres_ip";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute(['adres_ip' => $ip_address]);
+        $data = $stmt->fetch();
+        }
+        $sql="INSERT INTO `user_login`( `time`, `correct`, `id_user`, `computer`,
+        `id_address`)
+        VALUES (:time,:correct,:id_user,:computer,:id_address)";
+        $data=[
+        'time'=> date('Y-m-d H:i:s', time()),
+        'correct'=> $correct,
+        'id_user'=>$id_user,
+        'computer'=> $computer,
+        'id_address'=>$data['id']
+        ];
+        $this->db->prepare($sql)->execute($data);
+        } catch (Exception $e) {
+        print 'Exception' . $e->getMessage();
+        }
+        }
+        }
+ }
+
 
     public function remove_permission($permission_id) {
         // Usuwanie wszystkich przypisań uprawnienia do ról
@@ -503,7 +652,31 @@ public function log_2F_step1($login,$password){
             return false; // Coś poszło nie tak
         }
     }
-
+    public function register_user_activity($action_taken, $row_number,
+    $previous_data,$present_data,$table_affected)
+     {
+        $action_taken = $this->purifier->purify($action_taken);
+        $row_number = $this->purifier->purify($row_number);
+        $previous_data = $this->purifier->purify($previous_data);
+        $present_data = $this->purifier->purify($present_data);
+        $table_affected = $this->purifier->purify($table_affected);
+        try {
+        $sql = "INSERT INTO `user_activity`( `id_user`, `action_taken`, `table_affected`,
+        `row_number`, `previous_data`, `new_data`) VALUES
+        (:user_id,:action_taken,:table_affected,:row_number,:previous_data,:new_data)";
+        $data = [
+        'user_id' => $_SESSION['user_id'],
+        'action_taken' => $action_taken,
+        'table_affected' => $table_affected,
+        'row_number' => $row_number,
+        'previous_data' => $previous_data,
+        'new_data' => $present_data
+        ];
+        $this->db->prepare($sql)->execute($data);
+     } catch (Exception $e) {
+        print ' Exception' . $e->getMessage();
+     }
+     }
     
  public function log_user_in($login,$password){
  $login=$this->purifier->purify($login);
@@ -535,7 +708,9 @@ public function log_2F_step1($login,$password){
  echo 'login successfull<BR/>';
  echo 'You are logged in as: '.$user_data['login'].'<BR/>';
 
+ $_SESSION['user_id'] = $user_data['id'];
  $_SESSION['login'] = $user_data['login'];
+    $this->save_sing_in($user_data['login']);
 }else{
     echo 'login FAILED<BR/>';
     }

@@ -9,6 +9,7 @@ if (isset($_SESSION['session_expire'])) {
     }
 }
 
+
 ?><h5><?php
         if (!empty($_SESSION['login'])) {
             echo $_SESSION['login'];
@@ -18,6 +19,7 @@ if (isset($_SESSION['session_expire'])) {
         ?></h5><?php
         include_once "classes/Page.php";
         include_once "classes/Db.php";
+        include_once "classes/Pdo.php";
         include_once "classes/Filter.php";
         //require './htmlpurifier-4.14.0/library/HTMLPurifier.auto.php';
         Page::display_header("Messages");
@@ -33,19 +35,19 @@ if (isset($_SESSION['session_expire'])) {
             $name = $purifier->purify($_REQUEST['name']);
             $type = $_REQUEST['type'];
             $content = $purifier->purify($_REQUEST['content']);
-            if (!$db->addMessage($name, $type, $content))
+            if (!$db->addMessage($name, $type, $content, $_SESSION['login']))
                 echo "Adding new message failed";
 
 
-            $stmt = $db->pdo->prepare("INSERT INTO message (name, type, message, deleted) VALUES (:name, :type, :content, 0)");
-            $t = Filter::sanitizeData($name, 'str');
-            $tt = Filter::sanitizeData($type, 'str');
-            $ttt = Filter::sanitizeData($content, 'str');
-            $stmt->bindParam(':name', $t);
-            $stmt->bindParam(':type', $tt);
-            $stmt->bindParam(':content', $ttt);
-            if (!$stmt->execute())
-                echo "Adding new message failed";
+            // $stmt = $db->pdo->prepare("INSERT INTO message (name, type, message, deleted) VALUES (:name, :type, :content, 0)");
+            // $t = Filter::sanitizeData($name, 'str');
+            // $tt = Filter::sanitizeData($type, 'str');
+            // $ttt = Filter::sanitizeData($content, 'str');
+            // $stmt->bindParam(':name', $t);
+            // $stmt->bindParam(':type', $tt);
+            // $stmt->bindParam(':content', $ttt);
+            // if (!$stmt->execute())
+            //     echo "Adding new message failed";
         }
         ?>
 <!---------------------------------------------------------------------->
@@ -63,6 +65,15 @@ if (isset($_SESSION['session_expire'])) {
         }
     }
 
+    if (empty($_SESSION['roles'][1])) {
+        if ($where_clause) {
+            $where_clause .= " AND user_id = (SELECT id FROM user WHERE login = :login LIMIT 1) ";
+        } else {
+            $where_clause .= " WHERE user_id = (SELECT id FROM user WHERE login = :login LIMIT 1) ";
+        }
+    }
+    
+
     $sql = "SELECT * from message" . $where_clause; //biala_lista
     $stmt = $db->pdo->prepare($sql);
     if (isset($_REQUEST['filter_messages'])) {
@@ -76,12 +87,32 @@ if (isset($_SESSION['session_expire'])) {
         }
     }
 
+    if (empty($_SESSION['roles'][1])) {
+        $user_login = Filter::sanitizeData($_SESSION['login'], 'str');
+        
+        $stmt->bindParam(':login', $user_login);
+    }
+
+
     $stmt->execute();
     $messages = $stmt->fetchAll(PDO::FETCH_OBJ);
 
+    $Pdo = new Pdo_();
+
+   
+
+    $messagesIds = [];
     foreach ($messages as $msg) :
+        $messagesIds[] = $msg->id;
         echo $msg->id . ". " . $msg->message . "<br>";
     endforeach;
+
+    $Pdo->register_user_activity(
+        'display_messages', 
+        $_SESSION['user_id'], 
+        '', 
+        implode(', ', $messagesIds),
+         'message');
     ?>
 </ol>
 <!---------------------------------------------------------------------->
@@ -108,7 +139,7 @@ if (isset($_SESSION['session_expire'])) {
 </form>
 
 <!--------------------------------------------------------------------->
-<?php if (!empty($_SESSION['permissions'][21])) : ?>
+
 <hr>
 <P>Messages editing</P>
 <form method="post" action="message_edit.php">
@@ -117,13 +148,16 @@ if (isset($_SESSION['session_expire'])) {
             <td>Input id of message to edit: </td>
             <td>
                 <label for="id"></label>
-                <input required type="number" name="id" id="id" size="20" />
+                <select name="id">
+                    <?php foreach ($messages as $msg) : ?>
+                        <option value="<?php echo $msg->id; ?>"><?php echo $msg->id; ?></option> 
+                    <?php endforeach; ?>
+                </select>
             </td>
         </tr>
     </table>
     <input type="submit" id="submit" value="Edit message" name="edit_message">
 </form>
-<?php endif; ?>
 <!--------------------------------------------------------------------->
 
 <?php if (!empty($_SESSION['permissions'][20])) : ?>

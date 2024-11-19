@@ -8,7 +8,9 @@ if (isset($_SESSION['session_expire'])) {
         $_SESSION['session_expire'] = time();
     }
 }
-
+if (empty($_SESSION['permissions'][23])) {
+    die;
+}
 ?><h5><?php
     if (!empty($_SESSION['login'])) {
         echo $_SESSION['login'];

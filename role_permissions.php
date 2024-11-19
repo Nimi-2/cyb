@@ -8,7 +8,6 @@ if (isset($_SESSION['session_expire'])) {
         $_SESSION['session_expire'] = time();
     }
 }
-
 ?><h5><?php
     if (!empty($_SESSION['login'])) {
         echo $_SESSION['login'];
